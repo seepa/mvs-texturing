@@ -366,12 +366,12 @@ bool fill_hole(std::vector<std::size_t> const & hole, UniGraph const & graph,
     int image_size = std::min(std::floor(radius * 1.1f) * 2.0f, max_hole_patch_size);
     /* Ensure a minimum scale of one */
     image_size += 2 * (1 + texture_patch_border);
-    int scale = image_size / 2 - texture_patch_border;
+    float scale = image_size / 2.0f - texture_patch_border;
     for (std::size_t j = 0, k = 0; j < num_vertices; ++j) {
         if (is_border[j]) {
-            projections[j] = projections[j] * scale + image_size / 2;
+            projections[j] = projections[j] * scale + image_size / 2.0f;
         } else {
-            projections[j] = math::Vec2f(xx[k], xy[k]) * scale + image_size / 2;
+            projections[j] = math::Vec2f(xx[k], xy[k]) * scale + image_size / 2.0f;
             ++k;
         }
     }

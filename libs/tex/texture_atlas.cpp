@@ -24,57 +24,47 @@ TextureAtlas::TextureAtlas(unsigned int size) :
     validity_mask = mve::ByteImage::create(size, size, 1);
 }
 
-/**
-  * Copies the src image into the dest image at the given position,
-  * optionally adding a border.
-  * @warning asserts that the given src image fits into the given dest image.
-  */
-void copy_into(mve::ByteImage::ConstPtr src, int x, int y,
-    mve::ByteImage::Ptr dest, int border = 0) {
-
-    assert(x >= 0 && x + src->width() + 2 * border <= dest->width());
-    assert(y >= 0 && y + src->height() + 2 * border <= dest->height());
-
-    for (int i = 0; i < src->width() + 2 * border; ++i) {
-        for(int j = 0; j < src->height() + 2 * border; j++) {
-            int sx = i - border;
-            int sy = j - border;
-
-            if (sx < 0 || sx >= src->width() || sy < 0 || sy >= src->height())
-                continue;
-
-            for (int c = 0; c < src->channels(); ++c) {
-                dest->at(x + i, y + j, c) = src->at(sx, sy, c);
-            }
-        }
-    }
-}
 
 typedef std::vector<std::pair<int, int> > PixelVector;
-typedef std::set<std::pair<int, int> > PixelSet;
 
 bool
-TextureAtlas::insert(TexturePatch::ConstPtr texture_patch, float vmin, float vmax) {
+TextureAtlas::insert(TexturePatch::ConstPtr texture_patch, float mean, float max) {
     if (finalized) {
         throw util::Exception("No insertion possible, TextureAtlas already finalized");
     }
 
-    assert(bin != NULL);
-    assert(validity_mask != NULL);
+    assert(bin != nullptr);
+    assert(validity_mask != nullptr);
 
-    int const width = texture_patch->get_width() + 2 * padding;
-    int const height = texture_patch->get_height() + 2 * padding;
-    Rect<int> rect(0, 0, width, height);
+    int const width = texture_patch->get_width();
+    int const height = texture_patch->get_height();
+    Rect<int> rect(0, 0, width + 2 * padding, height + 2 * padding);
     if (!bin->insert(&rect)) return false;
 
+    float max_2 = max * max;
+
     /* Update texture atlas and its validity mask. */
-    mve::ByteImage::Ptr patch_image = mve::image::float_to_byte_image(
-        texture_patch->get_image(), vmin, vmax);
+    mve::FloatImage::ConstPtr opatch_image = texture_patch->get_image();
+    mve::ByteImage::Ptr patch_image = mve::ByteImage::create(width, height, 3);
+    mve::ByteImage::ConstPtr patch_validity_mask = texture_patch->get_validity_mask();
+    for (int i = 0; i < patch_image->get_value_amount(); ++i) {
+        if (patch_validity_mask->at(i / 3) == 0) continue;
+
+        // TODO: Investigate effect of clamping negative values
+        float v = std::max(opatch_image->at(i), 0.0f);
+
+        /* Apply tone mapping as proposed in
+         * Reinhard, Erik, et al. "Photographic tone reproduction for digital images."
+         * Transactions on Graphics (TOG). Vol. 21. No. 3. ACM, 2002.
+         */
+        v = (0.18f / mean) * v;
+        v = (v * (1.0f + v / max_2)) / (1.0f + v);
+        patch_image->at(i) = std::max(0.0f, std::min(v * 255.0f, 255.0f));
+    }
     mve::image::gamma_correct(patch_image, 1.0f / 2.2f);
 
-    copy_into(patch_image, rect.min_x, rect.min_y, image, padding);
-    mve::ByteImage::ConstPtr patch_validity_mask = texture_patch->get_validity_mask();
-    copy_into(patch_validity_mask, rect.min_x, rect.min_y, validity_mask, padding);
+    copy_into<uint8_t>(patch_image, rect.min_x, rect.min_y, image, padding);
+    copy_into<uint8_t>(patch_validity_mask, rect.min_x, rect.min_y, validity_mask, padding);
 
     TexturePatch::Faces const & patch_faces = texture_patch->get_faces();
     TexturePatch::Texcoords const & patch_texcoords = texture_patch->get_texcoords();
@@ -98,7 +88,26 @@ TextureAtlas::insert(TexturePatch::ConstPtr texture_patch, float vmin, float vma
     return true;
 }
 
+inline bool
+has_valid_neighbor(mve::ByteImage::Ptr validity_mask, int x, int y) {
+    int width = validity_mask->width();
+    int height = validity_mask->height();
 
+    for (int j = -1; j <= 1; ++j) {
+        for (int i = -1; i <= 1; ++i) {
+            int nx = x + i;
+            int ny = y + j;
+
+            if (nx < 0 || width <= nx) continue;
+            if (ny < 0 || height <= ny) continue;
+            if (validity_mask->at(nx, ny, 0) != 255) continue;
+
+            return true;
+        }
+    }
+
+    return false;
+}
 
 void
 TextureAtlas::apply_edge_padding(void) {
@@ -115,81 +124,62 @@ TextureAtlas::apply_edge_padding(void) {
     gauss /= 16.0f;
 
     /* Calculate the set of invalid pixels at the border of texture patches. */
-    PixelSet invalid_border_pixels;
-    for (int y = 0; y < height; ++y) {
-        for (int x = 0; x < width; ++x) {
+    std::set<int> invalid_border_pixels;
+    std::set<int>::iterator it = invalid_border_pixels.begin();
+    for (int y = height - 1; 0 <= y; --y) {
+        for (int x = width - 1; 0 <= x; --x) {
             if (validity_mask->at(x, y, 0) == 255) continue;
+            if (!has_valid_neighbor(validity_mask, x, y)) continue;
 
-            /* Check the direct neighbourhood of all invalid pixels. */
-            for (int j = -1; j <= 1; ++j) {
-                for (int i = -1; i <= 1; ++i) {
-                    int nx = x + i;
-                    int ny = y + j;
-                    /* If the invalid pixel has a valid neighbour: */
-                    if (0 <= nx && nx < width &&
-                        0 <= ny && ny < height &&
-                        validity_mask->at(nx, ny, 0) == 255) {
-
-                        /* Add the pixel to the set of invalid border pixels. */
-                        invalid_border_pixels.insert(std::pair<int, int>(x, y));
-                    }
-                }
-            }
+            it = invalid_border_pixels.insert(it, y * width + x);
         }
     }
-
-    mve::ByteImage::Ptr new_validity_mask = validity_mask->duplicate();
 
     /* Iteratively dilate border pixels until padding constants are reached. */
     for (unsigned int n = 0; n <= padding; ++n) {
         PixelVector new_valid_pixels;
 
-        PixelSet::iterator it = invalid_border_pixels.begin();
+        it = invalid_border_pixels.begin();
         for (;it != invalid_border_pixels.end(); it++) {
-            int x = it->first;
-            int y = it->second;
+            int x = *it % width;
+            int y = *it / width;
 
-            bool now_valid = false;
             /* Calculate new pixel value. */
-            for (int c = 0; c < 3; ++c) {
-                float norm = 0.0f;
-                float value = 0.0f;
-                for (int j = -1; j <= 1; ++j) {
-                    for (int i = -1; i <= 1; ++i) {
-                        int nx = x + i;
-                        int ny = y + j;
-                        if (0 <= nx && nx < width &&
-                            0 <= ny && ny < height &&
-                            new_validity_mask->at(nx, ny, 0) == 255) {
+            float norm = 0.0f;
+            math::Vec3f value(0.0f);
+            for (int j = -1; j <= 1; ++j) {
+                for (int i = -1; i <= 1; ++i) {
+                    int nx = x + i;
+                    int ny = y + j;
 
-                            float w = gauss[(j + 1) * 3 + (i + 1)];
-                            norm += w;
-                            value += (image->at(nx, ny, c) / 255.0f) * w;
-                        }
-                    }
+                    if (nx < 0 || width <= nx) continue;
+                    if (ny < 0 || height <= ny) continue;
+                    if (validity_mask->at(nx, ny, 0) != 255) continue;
+
+                    float w = gauss[(j + 1) * 3 + (i + 1)];
+                    norm += w;
+                    value += math::Vec3f(&image->at(nx, ny, 0)) * w;
                 }
-
-                if (norm == 0.0f)
-                    continue;
-
-                now_valid = true;
-                image->at(x, y, c) = (value / norm) * 255.0f;
             }
 
-            if (now_valid) {
-                new_valid_pixels.push_back(*it);
+            if (norm <= 0.0f) continue;
+
+            for (int c = 0; c < 3; ++c) {
+                image->at(x, y, c) = value[c] / norm;
             }
+            new_valid_pixels.push_back(std::make_pair(x, y));
         }
-
-        invalid_border_pixels.clear();
 
         /* Mark the new valid pixels valid in the validity mask. */
         for (std::size_t i = 0; i < new_valid_pixels.size(); ++i) {
              int x = new_valid_pixels[i].first;
              int y = new_valid_pixels[i].second;
 
-             new_validity_mask->at(x, y, 0) = 255;
+             validity_mask->at(x, y, 0) = 255;
         }
+
+        invalid_border_pixels.clear();
+        it = invalid_border_pixels.begin();
 
         /* Calculate the set of invalid pixels at the border of the valid area. */
         for (std::size_t i = 0; i < new_valid_pixels.size(); ++i) {
@@ -197,15 +187,15 @@ TextureAtlas::apply_edge_padding(void) {
             int y = new_valid_pixels[i].second;
 
             for (int j = -1; j <= 1; ++j) {
-                 for (int i = -1; i <= 1; ++i) {
-                     int nx = x + i;
-                     int ny = y + j;
-                     if (0 <= nx && nx < width &&
-                         0 <= ny && ny < height &&
-                         new_validity_mask->at(nx, ny, 0) == 0) {
+                for (int i = -1; i <= 1; ++i) {
+                    int nx = x - i;
+                    int ny = y - j;
 
-                         invalid_border_pixels.insert(std::pair<int, int>(nx, ny));
-                    }
+                    if (nx < 0 || width <= nx) continue;
+                    if (ny < 0 || height <= ny) continue;
+                    if (validity_mask->at(nx, ny, 0) == 255) continue;
+
+                    it = invalid_border_pixels.insert(it, ny * width + nx);
                 }
             }
         }

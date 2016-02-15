@@ -71,7 +71,6 @@ TexturePatch::adjust_colors(std::vector<math::Vec3f> const & adjust_values) {
                 math::Vec3f bcoords = tri.get_barycentric_coords(x, y);
                 bool inside = bcoords.minimum() >= 0.0f;
                 if (inside) {
-                    assert(x != 0 && y != 0);
                     for (int c = 0; c < 3; ++c) {
                         iadjust_values->at(x, y, c) = math::interpolate(
                             adjust_values[i][c], adjust_values[i + 1][c], adjust_values[i + 2][c],
@@ -107,6 +106,8 @@ TexturePatch::adjust_colors(std::vector<math::Vec3f> const & adjust_values) {
     for (int i = 0; i < image->get_pixel_amount(); ++i) {
         if (validity_mask->at(i, 0) != 0){
             for (int c = 0; c < 3; ++c) {
+                assert(std::isfinite(iadjust_values->at(i, c)));
+                assert(std::isfinite(image->at(i, c)));
                 image->at(i, c) += iadjust_values->at(i, c);
             }
         } else {

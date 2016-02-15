@@ -29,23 +29,6 @@ math::Vec3f simple_laplacian(int i, mve::FloatImage::ConstPtr img){
         + math::Vec3f(&img->at(i + width, 0));
 }
 
-bool valid_mask(mve::ByteImage::ConstPtr mask){
-    const int width = mask->width();
-    const int height = mask->height();
-
-    for (int x = 0; x < width; ++x)
-        if (mask->at(x, 0, 0) == 255 || mask->at(x, height - 1, 0) == 255)
-            return false;
-
-    for (int y = 0; y < height; ++y)
-        if (mask->at(0, y, 0) == 255 || mask->at(width - 1, y, 0) == 255)
-            return false;
-
-    //TODO check for sane boundary conditions...
-
-    return true;
-}
-
 void
 poisson_blend(mve::FloatImage::ConstPtr src, mve::ByteImage::ConstPtr mask,
     mve::FloatImage::Ptr dest, float alpha) {
@@ -54,7 +37,6 @@ poisson_blend(mve::FloatImage::ConstPtr src, mve::ByteImage::ConstPtr mask,
     assert(src->height() == mask->height() && mask->height() == dest->height());
     assert(src->channels() == 3 && dest->channels() == 3);
     assert(mask->channels() == 1);
-    assert(valid_mask(mask));
 
     const int n = dest->get_pixel_amount();
     const int width = dest->width();
@@ -80,6 +62,7 @@ poisson_blend(mve::FloatImage::ConstPtr src, mve::ByteImage::ConstPtr mask,
 
     for (int i = 0; i < n; ++i) {
         const int row = indices->at(i);
+
         if (mask->at(i) == 128 || mask->at(i) == 64) {
             Eigen::Triplet<float, int> t(row, row, 1.0f);
             coefficients_A.push_back(t);
@@ -127,12 +110,14 @@ poisson_blend(mve::FloatImage::ConstPtr src, mve::ByteImage::ConstPtr mask,
         for (std::size_t i = 0; i < coefficients_b.size(); ++i)
             b[i] = coefficients_b[i][channel];
 
-        Eigen::VectorXf x(n);
+        Eigen::VectorXf x(nnz);
         x = solver.solve(b);
 
         for (int i = 0; i < n; ++i) {
             int index = indices->at(i);
-            if (index != -1) dest->at(i, channel) = x[index];
+            if (index == -1) continue;
+
+            dest->at(i, channel) = x[index];
         }
     }
 }

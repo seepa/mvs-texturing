@@ -51,7 +51,6 @@ class TextureView {
         mve::ByteImage::Ptr gradient_magnitude;
         std::vector<bool> validity_mask;
 
-
     public:
         /** Returns the id of the TexureView which is consistent for every run. */
         std::size_t get_id(void) const;

@@ -176,7 +176,7 @@ global_seam_leveling(UniGraph const & graph, mve::TriangleMesh::ConstPtr mesh,
 
     float const lambda = 0.1f;
 
-    /* Fill the Tikhonov matrix Gamma(regularization constraints). */
+    /* Fill the first Tikhonov matrix Gamma (smoothness constraint). */
     std::size_t Gamma_row = 0;
     std::vector<Eigen::Triplet<float, int> > coefficients_Gamma;
     coefficients_Gamma.reserve(2 * num_vertices);
@@ -237,10 +237,23 @@ global_seam_leveling(UniGraph const & graph, mve::TriangleMesh::ConstPtr mesh,
     std::size_t A_rows = A_row;
     assert(A_rows < static_cast<std::size_t>(std::numeric_limits<int>::max()));
 
+
     SpMat A(A_rows, x_rows);
     A.setFromTriplets(coefficients_A.begin(), coefficients_A.end());
 
-    SpMat Lhs = A.transpose() * A + Gamma.transpose() * Gamma;
+    float const eta = 0.0005f;
+
+    /* Fill the second Tikhonov matrix Kappa (miminality constraint). */
+    std::vector<Eigen::Triplet<float, int> > coefficients_Kappa;
+    for (std::size_t i = 0; i < x_rows; ++i) {
+        Eigen::Triplet<float, int> t(i, i, eta);
+        coefficients_Kappa.push_back(t);
+    }
+
+    SpMat Kappa(x_rows, x_rows);
+    Kappa.setFromTriplets(coefficients_Kappa.begin(), coefficients_Kappa.end());
+
+    SpMat Lhs = A.transpose() * A + Gamma.transpose() * Gamma + Kappa;
     /* Only keep lower triangle (CG only uses the lower), prune the rest and compress matrix. */
     Lhs.prune([](const int& row, const int& col, const float& value) -> bool {
             return col <= row && value != 0.0f;
@@ -271,9 +284,6 @@ global_seam_leveling(UniGraph const & graph, mve::TriangleMesh::ConstPtr mesh,
         Eigen::VectorXf x(x_rows);
         x = cg.solve(Rhs);
 
-        /* Subtract mean because system is underconstrained and we seek the solution with minimal adjustments. */
-        x = x.array() - x.mean();
-
         #pragma omp critical
         std::cout << "\t\tColor channel " << channel << ": CG took "
             << cg.iterations() << " iterations. Residual is " << cg.error() << std::endl;
@@ -302,17 +312,14 @@ global_seam_leveling(UniGraph const & graph, mve::TriangleMesh::ConstPtr mesh,
         std::vector<math::Vec3f> patch_adjust_values(faces.size() * 3, math::Vec3f(0.0f));
 
         /* Only adjust texture_patches originating form input images. */
-        if (label == 0) {
-            texture_patch->adjust_colors(patch_adjust_values);
-            texture_patch_counter.inc();
-            continue;
-        };
-
-        for (std::size_t j = 0; j < faces.size(); ++j) {
-            for (std::size_t k = 0; k < 3; ++k) {
-                std::size_t face_pos = faces[j] * 3 + k;
-                std::size_t vertex = mesh_faces[face_pos];
-                patch_adjust_values[j * 3 + k] = adjust_values[vertex].find(label)->second;
+        if (label != 0) {
+            for (std::size_t j = 0; j < faces.size(); ++j) {
+                for (std::size_t k = 0; k < 3; ++k) {
+                    std::size_t face_pos = faces[j] * 3 + k;
+                    std::size_t vertex = mesh_faces[face_pos];
+                    math::Vec3f avalue = adjust_values[vertex].find(label)->second;
+                    patch_adjust_values[j * 3 + k] = avalue;
+                }
             }
         }
 

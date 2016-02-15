@@ -22,29 +22,31 @@ mean_color_of_edge_point(std::vector<EdgeProjectionInfo> const & edge_projection
     std::vector<TexturePatch::Ptr> const & texture_patches, float t) {
 
     assert(0.0f <= t && t <= 1.0f);
-    math::Accum<math::Vec3f> color_accum(math::Vec3f(0.0f));
+    math::Vec3f sum(0.0f);
+    std::size_t num_values = 0;
 
     for (EdgeProjectionInfo const & edge_projection_info : edge_projection_infos) {
         TexturePatch::Ptr texture_patch = texture_patches[edge_projection_info.texture_patch_id];
         if (texture_patch->get_label() == 0) continue;
         math::Vec2f pixel = edge_projection_info.p1 * t + (1.0f - t) * edge_projection_info.p2;
-        math::Vec3f color = texture_patch->get_pixel_value(pixel);
-        color_accum.add(color, 1.0f);
+        sum += texture_patch->get_pixel_value(pixel);
+        num_values += 1;
     }
 
-    math::Vec3f mean_color = color_accum.normalized();
-    return mean_color;
+    assert(num_values > 0);
+
+    return sum / num_values;
 }
 
 void
-draw_line(math::Vec2f p1, math::Vec2f p2,
+draw_line(math::Vec2i p1, math::Vec2i p2,
     std::vector<math::Vec3f> const & edge_color, TexturePatch::Ptr texture_patch) {
     /* http://en.wikipedia.org/wiki/Bresenham%27s_line_algorithm */
 
-    int x0 = std::floor(p1[0] + 0.5f);
-    int y0 = std::floor(p1[1] + 0.5f);
-    int const x1 = std::floor(p2[0] + 0.5f);
-    int const y1 = std::floor(p2[1] + 0.5f);
+    int x0 = p1[0];
+    int y0 = p1[1];
+    int const x1 = p2[0];
+    int const y1 = p2[1];
 
     float tdx = static_cast<float>(x1 - x0);
     float tdy = static_cast<float>(y1 - y0);
@@ -155,14 +157,19 @@ local_seam_leveling(UniGraph const & graph, mve::TriangleMesh::ConstPtr mesh,
     for (std::size_t i = 0; i < vertex_colors.size(); ++i) {
         std::vector<VertexProjectionInfo> const & projection_infos = vertex_projection_infos[i];
 
-        math::Accum<math::Vec3f> color_accum(math::Vec3f(0.0f));
+        math::Vec3f sum(0.0f);
+        std::size_t num_values = 0;
         for (VertexProjectionInfo const & projection_info : projection_infos) {
             TexturePatch::Ptr texture_patch = texture_patches->at(projection_info.texture_patch_id);
             if (texture_patch->get_label() == 0) continue;
             math::Vec3f color = texture_patch->get_pixel_value(projection_info.projection);
-            color_accum.add(color, 1.0f);
+            sum += color;
+            num_values += 1;
         }
-        vertex_colors[i] = color_accum.normalized();
+
+        if (num_values == 0) continue;
+
+        vertex_colors[i] = sum / num_values;
 
         for (VertexProjectionInfo const & projection_info : projection_infos) {
             Pixel pixel;
@@ -179,12 +186,12 @@ local_seam_leveling(UniGraph const & graph, mve::TriangleMesh::ConstPtr mesh,
         mve::FloatImage::Ptr image = texture_patch->get_image()->duplicate();
 
         /* Apply colors. */
-        for (Pixel const & pixel : pixels[i]) {
-            texture_patch->set_pixel_value(pixel.pos, *pixel.color);
-        }
-
         for (Line const & line : lines[i]) {
             draw_line(line.from, line.to, *line.color, texture_patch);
+        }
+
+        for (Pixel const & pixel : pixels[i]) {
+            texture_patch->set_pixel_value(pixel.pos, *pixel.color);
         }
 
         texture_patch_counter.progress<SIMPLE>();

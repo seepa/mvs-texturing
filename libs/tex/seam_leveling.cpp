@@ -87,7 +87,8 @@ find_mesh_edge_projections(
         }
     }
 
-    edge_projection_infos->insert(edge_projection_infos->end(), edge_projection_infos_set.begin(), edge_projection_infos_set.end());
+    edge_projection_infos->insert(edge_projection_infos->end(),
+        edge_projection_infos_set.begin(), edge_projection_infos_set.end());
 }
 
 TEX_NAMESPACE_END

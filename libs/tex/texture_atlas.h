@@ -60,8 +60,7 @@ class TextureAtlas {
         Texcoords const & get_texcoords(void) const;
         mve::ByteImage::ConstPtr get_image(void) const;
 
-        bool insert(TexturePatch::ConstPtr texture_patch,
-            float vmin, float vmax);
+        bool insert(TexturePatch::ConstPtr texture_patch, float mean, float max);
 
         void finalize(void);
 };
@@ -94,4 +93,30 @@ TextureAtlas::get_image(void) const {
     return image;
 }
 
+/**
+  * Copies the src image into the dest image at the given position,
+  * optionally adding a border.
+  * @warning asserts that the given src image fits into the given dest image.
+  */
+template <typename T>
+void copy_into(typename mve::Image<T>::ConstPtr src, int x, int y,
+    typename mve::Image<T>::Ptr dest, int border = 0) {
+
+    assert(x >= 0 && x + src->width() + 2 * border <= dest->width());
+    assert(y >= 0 && y + src->height() + 2 * border <= dest->height());
+
+    for(int j = 0; j < src->height() + 2 * border; j++) {
+        for (int i = 0; i < src->width() + 2 * border; ++i) {
+            int sx = i - border;
+            int sy = j - border;
+
+            if (sx < 0 || sx >= src->width() || sy < 0 || sy >= src->height())
+                continue;
+
+            for (int c = 0; c < src->channels(); ++c) {
+                dest->at(x + i, y + j, c) = src->at(sx, sy, c);
+            }
+        }
+    }
+}
 #endif /* TEX_TEXTUREATLAS_HEADER */
