@@ -33,7 +33,7 @@ TexturePatch::TexturePatch(TexturePatch const & texture_patch) {
     texcoords = std::vector<math::Vec2f>(texture_patch.texcoords);
     image = texture_patch.image->duplicate();
     validity_mask = texture_patch.validity_mask->duplicate();
-    if (texture_patch.blending_mask != NULL) {
+    if (texture_patch.blending_mask != nullptr) {
         blending_mask = texture_patch.blending_mask->duplicate();
     }
 }
@@ -42,7 +42,7 @@ const float sqrt_2 = sqrt(2);
 
 void
 TexturePatch::adjust_colors(std::vector<math::Vec3f> const & adjust_values) {
-    assert(blending_mask != NULL);
+    assert(blending_mask != nullptr);
 
     validity_mask->fill(0);
 
@@ -126,7 +126,7 @@ bool TexturePatch::valid_pixel(math::Vec2f pixel) const {
     float const width = static_cast<float>(get_width());
 
     bool valid = (0.0f <= x && x < width && 0.0f <= y && y < height);
-    if (valid && validity_mask != NULL){
+    if (valid && validity_mask != nullptr){
         /* Only pixel which can be correctly interpolated are valid. */
         float cx = std::max(0.0f, std::min(width - 1.0f, x));
         float cy = std::max(0.0f, std::min(height - 1.0f, y));
@@ -155,7 +155,7 @@ TexturePatch::valid_pixel(math::Vec2i pixel) const {
     int const y = pixel[1];
 
     bool valid = (0 <= x && x < get_width() && 0 <= y && y < get_height());
-    if (valid && validity_mask != NULL) {
+    if (valid && validity_mask != nullptr) {
         valid = validity_mask->at(x, y, 0) == 255;
     }
 
@@ -173,7 +173,7 @@ TexturePatch::get_pixel_value(math::Vec2f pixel) const {
 
 void
 TexturePatch::set_pixel_value(math::Vec2i pixel, math::Vec3f color) {
-    assert(blending_mask != NULL);
+    assert(blending_mask != nullptr);
     assert(valid_pixel(pixel));
 
     std::copy(color.begin(), color.end(), &image->at(pixel[0], pixel[1], 0));

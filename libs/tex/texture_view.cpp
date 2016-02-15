@@ -41,7 +41,7 @@ TextureView::TextureView(std::size_t id, mve::CameraInfo const & camera,
 
 void
 TextureView::generate_validity_mask(void) {
-    assert(image != NULL);
+    assert(image != nullptr);
     validity_mask.resize(width * height, true);
     mve::ByteImage::Ptr checked = mve::ByteImage::create(width, height, 1);
 
@@ -95,13 +95,13 @@ TextureView::generate_validity_mask(void) {
 
 void
 TextureView::load_image(void) {
-    if(image != NULL) return;
+    if(image != nullptr) return;
     image = mve::image::load_file(image_file);
 }
 
 void
 TextureView::generate_gradient_magnitude(void) {
-    assert(image != NULL);
+    assert(image != nullptr);
     mve::ByteImage::Ptr bw = mve::image::desaturate<std::uint8_t>(image, mve::image::DESATURATE_LUMINANCE);
     gradient_magnitude = mve::image::sobel_edge<std::uint8_t>(bw);
 }
@@ -135,8 +135,8 @@ void
 TextureView::get_face_info(math::Vec3f const & v1, math::Vec3f const & v2,
     math::Vec3f const & v3, FaceProjectionInfo * face_info, Settings const & settings) const {
 
-    assert(image != NULL);
-    assert(settings.data_term != GMI || gradient_magnitude != NULL);
+    assert(image != nullptr);
+    assert(settings.data_term != GMI || gradient_magnitude != nullptr);
 
     math::Vec2f p1 = get_pixel_coords(v1);
     math::Vec2f p2 = get_pixel_coords(v2);
@@ -283,7 +283,7 @@ TextureView::valid_pixel(math::Vec2f pixel) const {
 void
 TextureView::export_triangle(math::Vec3f v1, math::Vec3f v2, math::Vec3f v3,
     std::string const & filename) const {
-    assert(image != NULL);
+    assert(image != nullptr);
     math::Vec2f p1 = get_pixel_coords(v1);
     math::Vec2f p2 = get_pixel_coords(v2);
     math::Vec2f p3 = get_pixel_coords(v3);

@@ -111,8 +111,8 @@ has_valid_neighbor(mve::ByteImage::Ptr validity_mask, int x, int y) {
 
 void
 TextureAtlas::apply_edge_padding(void) {
-    assert(image != NULL);
-    assert(validity_mask != NULL);
+    assert(image != nullptr);
+    assert(validity_mask != nullptr);
 
     const int width = image->width();
     const int height = image->height();

@@ -145,7 +145,7 @@ TextureView::get_height(void) const {
 
 inline mve::ByteImage::Ptr
 TextureView::get_image(void) const {
-    assert(image != NULL);
+    assert(image != nullptr);
     return image;
 }
 
@@ -172,7 +172,7 @@ TextureView::get_pixel_values(math::Vec3f const & vertex) const {
 
 inline math::Vec3f
 TextureView::get_pixel_values(math::Vec2f const & pixel) const {
-    assert(image != NULL);
+    assert(image != nullptr);
     math::Vec3uc values;
     image->linear_at(pixel[0], pixel[1], *values);
     return math::Vec3f(values) / 255.0f;
@@ -191,13 +191,13 @@ TextureView::release_validity_mask(void) {
 
 inline void
 TextureView::release_gradient_magnitude(void) {
-    assert(gradient_magnitude != NULL);
+    assert(gradient_magnitude != nullptr);
     gradient_magnitude.reset();
 }
 
 inline void
 TextureView::release_image(void) {
-    assert(image != NULL);
+    assert(image != nullptr);
     image.reset();
 }
 

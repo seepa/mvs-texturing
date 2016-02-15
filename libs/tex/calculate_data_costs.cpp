@@ -257,7 +257,7 @@ calculate_face_projection_infos(mve::TriangleMesh::ConstPtr mesh,
     }
 
     delete model;
-    model = NULL;
+    model = nullptr;
 }
 
 void

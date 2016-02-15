@@ -129,13 +129,13 @@ TexturePatch::get_validity_mask(void) const {
 
 inline mve::ByteImage::ConstPtr
 TexturePatch::get_blending_mask(void) const {
-    assert(blending_mask != NULL);
+    assert(blending_mask != nullptr);
     return blending_mask;
 }
 
 inline void
 TexturePatch::release_blending_mask(void) {
-    assert(blending_mask != NULL);
+    assert(blending_mask != nullptr);
     blending_mask.reset();
 }
 
